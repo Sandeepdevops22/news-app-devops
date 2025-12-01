@@ -15,16 +15,16 @@ public class NewsServlet extends HttpServlet {
 
     @Override
     public void init() throws ServletException {
-        try (InputStream in = getClass().getClassLoader().getResourceAsStream("config.properties")) {
-            if (in == null) throw new ServletException("config.properties missing!");
+        try (InputStream input = getClass().getClassLoader().getResourceAsStream("config.properties")) {
+            if (input == null) throw new ServletException("config.properties not found");
 
-            Properties p = new Properties();
-            p.load(in);
+            Properties props = new Properties();
+            props.load(input);
 
-            apiKey = p.getProperty("NEWS_API_KEY");
-            baseUrl = p.getProperty("NEWS_URL");
+            apiKey = props.getProperty("NEWS_API_KEY");
+            baseUrl = props.getProperty("NEWS_URL");
 
-            if (apiKey == null || apiKey.isEmpty())
+            if (apiKey == null || apiKey.isBlank())
                 throw new ServletException("NEWS_API_KEY missing in config.properties");
 
         } catch (Exception e) {
@@ -32,71 +32,70 @@ public class NewsServlet extends HttpServlet {
         }
     }
 
-    private JSONObject fetch(String q, int page, int pageSize) throws IOException {
-        String url = baseUrl +
-                "q=" + URLEncoder.encode(q, "UTF-8") +
-                "&sortBy=publishedAt" +
-                "&language=en" +
+    private JSONArray fetchNews(String query, int page, int pageSize) throws IOException {
+        String urlStr =
+                baseUrl +
+                "q=" + URLEncoder.encode(query, "UTF-8") +
                 "&page=" + page +
                 "&pageSize=" + pageSize +
+                "&sortBy=publishedAt" +
                 "&apiKey=" + apiKey;
 
-        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        URL url = new URL(urlStr);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("GET");
 
-        InputStream is = conn.getInputStream();
+        InputStream is = conn.getResponseCode() >= 400 ? conn.getErrorStream() : conn.getInputStream();
         BufferedReader br = new BufferedReader(new InputStreamReader(is));
 
-        StringBuilder sb = new StringBuilder();
+        StringBuilder json = new StringBuilder();
         String line;
-        while ((line = br.readLine()) != null) sb.append(line);
+        while ((line = br.readLine()) != null) json.append(line);
 
-        return new JSONObject(sb.toString());
+        JSONObject obj = new JSONObject(json.toString());
+
+        if (!obj.optString("status", "").equals("ok"))
+            return new JSONArray(); // return empty, fallback later
+
+        return obj.optJSONArray("articles") != null ? obj.getJSONArray("articles") : new JSONArray();
+    }
+
+    private JSONArray getNewsWithFallback(String query, int page, int size) throws IOException {
+        JSONArray articles = fetchNews(query, page, size);
+
+        if (articles.length() == 0) {
+            // fallback to trending
+            articles = fetchNews("breaking news", 1, size);
+        }
+        return articles;
     }
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws IOException, ServletException {
 
-        String servletPath = req.getServletPath();
-
-        if ("/news-data".equals(servletPath)) {
-            handleApi(req, resp);
+        if (req.getServletPath().equals("/news-data")) {
+            handleAjax(req, resp);
             return;
         }
-
         req.getRequestDispatcher("/index.jsp").forward(req, resp);
     }
 
-    private void handleApi(HttpServletRequest req, HttpServletResponse resp)
-            throws IOException {
+    private void handleAjax(HttpServletRequest req, HttpServletResponse resp) throws IOException {
 
-        String q = req.getParameter("q");
-        String category = req.getParameter("category");
-
-        String query = (q != null && !q.isEmpty())
-                ? q
-                : (category != null && !category.isEmpty() ? category : "india");
+        String query = req.getParameter("q");
+        if (query == null || query.isBlank()) query = "india";
 
         int page = Integer.parseInt(req.getParameter("page") == null ? "1" : req.getParameter("page"));
-        int pageSize = Integer.parseInt(req.getParameter("pageSize") == null ? "10" : req.getParameter("pageSize"));
+        int size = Integer.parseInt(req.getParameter("pageSize") == null ? "10" : req.getParameter("pageSize"));
+
+        JSONArray articles = getNewsWithFallback(query, page, size);
 
         JSONObject out = new JSONObject();
-        try {
-            JSONObject json = fetch(query, page, pageSize);
-
-            out.put("status", json.optString("status"));
-            out.put("totalResults", json.optInt("totalResults"));
-            out.put("articles", json.optJSONArray("articles"));
-
-        } catch (Exception e) {
-            out.put("status", "error");
-            out.put("message", e.getMessage());
-            out.put("articles", new JSONArray());
-        }
+        out.put("status", "ok");
+        out.put("articles", articles);
 
         resp.setContentType("application/json");
         resp.getWriter().write(out.toString());
     }
 }
-

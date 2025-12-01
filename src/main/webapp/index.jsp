@@ -1,208 +1,149 @@
-<%@ page import="org.json.*, java.util.*" %>
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>News App — Feature 2</title>
+    <meta charset="UTF-8">
+    <title>Feature 2 News App</title>
 
-  <!-- Bootstrap -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-        rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+          rel="stylesheet">
 
-  <style>
-    body.dark { background:#0b1220; color:#e6eef8; }
-    .card.dark { background:#0f1724; color:#e6eef8; border-color:#1f2a38; }
-    .trending { gap: 8px; display:flex; flex-wrap:wrap; }
-    .badge-tag { cursor:pointer; }
-    .img-thumb { max-height:180px; object-fit:cover; width:100%; border-top-left-radius:.5rem; border-top-right-radius:.5rem; }
-    .loading { display:none; text-align:center; padding:12px; color:#666; }
-  </style>
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f172a, #1e293b);
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        .card {
+            backdrop-filter: blur(8px);
+            background: rgba(255,255,255,.08);
+            border: 1px solid rgba(255,255,255,.1);
+            transition: .3s;
+        }
+        .card:hover { transform: scale(1.03); }
 
-  <script>
-    function $(id){ return document.getElementById(id); }
+        .category-btn {
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
 
-    // Theme
-    function loadTheme(){
-      const t = localStorage.getItem('theme') || 'light';
-      if (t === 'dark') document.body.classList.add('dark');
-    }
-    function toggleTheme(){
-      document.body.classList.toggle('dark');
-      localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
-    }
+        .chip {
+            padding: 5px 12px;
+            background: #475569;
+            border-radius: 20px;
+            margin-right: 6px;
+            cursor: pointer;
+            transition: .2s;
+        }
+        .chip:hover { background: #64748b; }
 
-    let currentPage = 1;
-    let currentQuery = 'india';
-    let currentCategory = '';
+        #loading { display: none; color: #f87171; }
+    </style>
 
-    // Escape XSS
-    function escapeHtml(s){
-      if(!s) return '';
-      return s.replace(/&/g,'&amp;')
-              .replace(/</g,'&lt;')
-              .replace(/>/g,'&gt;')
-              .replace(/"/g,'&quot;');
-    }
+    <script>
+        let page = 1;
+        let query = "india";
 
-    function fetchNews(reset){
-      if (reset) currentPage = 1;
-      const pageSize = 10;
-      const q = encodeURIComponent(currentQuery);
+        function $(id) { return document.getElementById(id); }
 
-      const url = '/news-data?q=' + q +
-                  '&category=' + encodeURIComponent(currentCategory) +
-                  '&page=' + currentPage +
-                  '&pageSize=' + pageSize;
+        function fetchNews(reset){
+            if (reset) { page = 1; $("news").innerHTML = ""; }
 
-      $('loading').style.display = 'block';
+            $("loading").style.display = "block";
 
-      fetch(url)
-        .then(r => r.json())
-        .then(json => {
-          $('loading').style.display = 'none';
+            const url = "/news-data?q=" + encodeURIComponent(query) +
+                        "&page=" + page + "&pageSize=10";
 
-          const arr = json.articles || [];
-          if (reset) $('news-list').innerHTML = '';
+            fetch(url)
+                .then(r => r.json())
+                .then(j => {
+                    $("loading").style.display = "none";
+                    j.articles.forEach(a => addCard(a));
+                    page++;
+                })
+                .catch(e => {
+                    $("loading").style.display = "block";
+                    $("loading").innerText = "Could not load news.";
+                });
+        }
 
-          if (arr.length === 0 && reset) {
-            $('news-list').innerHTML =
-              '<div class="text-center text-muted p-3">No news found.</div>';
-            $('updated').innerText = 'Updated: ' + new Date().toLocaleString();
-            return;
-          }
+        function addCard(a){
+            const div = document.createElement("div");
+            div.className = "col-md-6 mb-3";
 
-          arr.forEach(a => appendCard(a));
+            let img = "";
+            if (a.urlToImage) {
+                img = `<img src="${a.urlToImage}" class="img-fluid rounded-top" 
+                        onerror="this.style.display='none'">`;
+            }
 
-          $('updated').innerText = 'Updated: ' + new Date().toLocaleString();
+            div.innerHTML = `
+            <div class="card p-3">
+                ${img}
+                <h5 class="mt-3">${a.title || ""}</h5>
+                <p>${a.description || ""}</p>
+                <a href="${a.url}" class="btn btn-primary btn-sm" target="_blank">Read More</a>
+            </div>
+            `;
+            $("news").appendChild(div);
+        }
 
-          currentPage++;
-        })
-        .catch(err => {
-          $('loading').style.display = 'none';
-          $('news-list').innerHTML =
-            '<div class="text-center text-danger p-3">Error loading news.</div>';
-          console.error(err);
-        });
-    }
+        function searchNews(e){
+            e.preventDefault();
+            query = $("search").value || "india";
+            fetchNews(true);
+        }
 
-    // Append card
-    function appendCard(a){
-      const card = document.createElement('div');
-      card.className = 'col-md-6 mb-3';
+        function setCategory(cat){
+            query = cat;
+            $("search").value = "";
+            fetchNews(true);
+        }
 
-      const title = escapeHtml(a.title || '');
-      const desc = escapeHtml(a.description || '');
-      const source = escapeHtml((a.source && a.source.name) ? a.source.name : '');
-      const time = escapeHtml(a.publishedAt ? new Date(a.publishedAt).toLocaleString() : '');
-      const image = (a.urlToImage)
-        ? '<img src="' + a.urlToImage + '" class="img-thumb" onerror="this.style.display=\'none\'">'
-        : '';
+        function setChip(tag){
+            query = tag;
+            $("search").value = tag;
+            fetchNews(true);
+        }
 
-      const html =
-        '<div class="card ' + (document.body.classList.contains("dark") ? 'dark' : '') + '">' +
-          image +
-          '<div class="card-body">' +
-            '<h5 class="card-title">' + title + '</h5>' +
-            '<p class="card-text">' + desc + '</p>' +
-            '<div class="d-flex justify-content-between align-items-center">' +
-              '<small class="text-muted">' + source + ' • ' + time + '</small>' +
-              '<a href="' + a.url + '" target="_blank" class="btn btn-sm btn-primary">Read</a>' +
-            '</div>' +
-          '</div>' +
-        '</div>';
+        window.onload = function(){
+            fetchNews(true);
+        };
+    </script>
 
-      card.innerHTML = html;
-      $('news-list').appendChild(card);
-    }
-
-    function onSearch(e){
-      e.preventDefault();
-      currentQuery = $('search-input').value.trim() || 'india';
-      currentCategory = '';
-      fetchNews(true);
-    }
-
-    function onCategory(cat){
-      currentCategory = cat;
-      currentQuery = cat;
-      $('search-input').value = '';
-      fetchNews(true);
-    }
-
-    function onTag(tag){
-      currentQuery = tag;
-      currentCategory = '';
-      $('search-input').value = tag;
-      fetchNews(true);
-    }
-
-    // Infinite scroll
-    window.addEventListener('scroll', () => {
-      if ((window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 300)) {
-        fetchNews(false);
-      }
-    });
-
-    window.addEventListener('load', () => {
-      loadTheme();
-      fetchNews(true);
-
-      const tags = ['Elections','Cricket','AI','Movies','Startups'];
-      tags.forEach(t => {
-        const el = document.createElement('span');
-        el.className = 'badge bg-secondary badge-tag';
-        el.style.cursor = 'pointer';
-        el.style.marginRight = '6px';
-        el.onclick = () => onTag(t);
-        el.innerText = t;
-        $('trending').appendChild(el);
-      });
-    });
-  </script>
 </head>
-
 <body>
 
 <div class="container py-4">
 
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-      <h3 class="m-0">📰 Feature 2 — News App</h3>
-      <small id="updated" class="text-muted">Updated: --</small>
+    <h2 class="mb-4 text-center">📰 Feature 2 News App</h2>
+
+    <!-- Search -->
+    <form onsubmit="searchNews(event)" class="input-group mb-3">
+        <input id="search" class="form-control" placeholder="Search news...">
+        <button class="btn btn-primary">Search</button>
+    </form>
+
+    <!-- Categories -->
+    <div class="mb-3">
+        <button class="btn btn-outline-light category-btn" onclick="setCategory('india')">India</button>
+        <button class="btn btn-outline-light category-btn" onclick="setCategory('technology')">Technology</button>
+        <button class="btn btn-outline-light category-btn" onclick="setCategory('sports')">Sports</button>
+        <button class="btn btn-outline-light category-btn" onclick="setCategory('business')">Business</button>
+        <button class="btn btn-outline-light category-btn" onclick="setCategory('health')">Health</button>
     </div>
 
-    <div>
-      <button class="btn btn-outline-secondary me-2" onclick="toggleTheme()">Dark Mode</button>
-      <a href="/news" class="btn btn-outline-primary">Reload</a>
+    <!-- Trending Chips -->
+    <div class="mb-4">
+        <span class="chip" onclick="setChip('Cricket')">Cricket</span>
+        <span class="chip" onclick="setChip('AI')">AI</span>
+        <span class="chip" onclick="setChip('Movies')">Movies</span>
+        <span class="chip" onclick="setChip('Startups')">Startups</span>
+        <span class="chip" onclick="setChip('Politics')">Politics</span>
     </div>
-  </div>
 
-  <!-- Search -->
-  <form onsubmit="onSearch(event)" class="input-group mb-3">
-    <input id="search-input" type="text" class="form-control"
-           placeholder="Search news…">
-    <button class="btn btn-primary">Search</button>
-  </form>
+    <div id="loading" class="text-center mb-3">Loading news...</div>
 
-  <!-- Categories -->
-  <div class="mb-3">
-    <div class="btn-group" role="group">
-      <button class="btn btn-outline-primary" onclick="onCategory('india')">India</button>
-      <button class="btn btn-outline-primary" onclick="onCategory('technology')">Technology</button>
-      <button class="btn btn-outline-primary" onclick="onCategory('sports')">Sports</button>
-      <button class="btn btn-outline-primary" onclick="onCategory('business')">Business</button>
-      <button class="btn btn-outline-primary" onclick="onCategory('health')">Health</button>
-    </div>
-  </div>
-
-  <!-- Trending -->
-  <div id="trending" class="trending mb-3"></div>
-
-  <!-- Loading -->
-  <div id="loading" class="loading">Loading news…</div>
-
-  <!-- News cards -->
-  <div id="news-list" class="row"></div>
+    <div class="row" id="news"></div>
 
 </div>
 
