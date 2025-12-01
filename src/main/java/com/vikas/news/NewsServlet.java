@@ -6,7 +6,6 @@ import org.json.*;
 
 import java.io.*;
 import java.net.*;
-import java.time.LocalDate;
 import java.util.Properties;
 
 public class NewsServlet extends HttpServlet {
@@ -17,44 +16,40 @@ public class NewsServlet extends HttpServlet {
     @Override
     public void init() throws ServletException {
         try (InputStream in = getClass().getClassLoader().getResourceAsStream("config.properties")) {
-            if (in == null) throw new ServletException("config.properties missing");
+            if (in == null) throw new ServletException("config.properties missing!");
+
             Properties p = new Properties();
             p.load(in);
 
             apiKey = p.getProperty("NEWS_API_KEY");
             baseUrl = p.getProperty("NEWS_URL");
 
-            if (apiKey == null || apiKey.isEmpty()) throw new ServletException("API key missing");
-            if (baseUrl == null || baseUrl.isEmpty())
-                baseUrl = "https://newsapi.org/v2/everything?";
-        } catch (IOException e) {
+            if (apiKey == null || apiKey.isEmpty())
+                throw new ServletException("NEWS_API_KEY missing in config.properties");
+
+        } catch (Exception e) {
             throw new ServletException("Failed to load config", e);
         }
     }
 
-    private JSONObject callNewsAPI(String query, int page, int pageSize) throws IOException {
-        LocalDate today = LocalDate.now();
-        LocalDate weekAgo = today.minusDays(7);
+    private JSONObject fetch(String q, int page, int pageSize) throws IOException {
+        String url = baseUrl +
+                "q=" + URLEncoder.encode(q, "UTF-8") +
+                "&sortBy=publishedAt" +
+                "&language=en" +
+                "&page=" + page +
+                "&pageSize=" + pageSize +
+                "&apiKey=" + apiKey;
 
-        String urlStr = baseUrl
-                + "q=" + URLEncoder.encode(query, "UTF-8")
-                + "&from=" + weekAgo
-                + "&to=" + today
-                + "&sortBy=publishedAt"
-                + "&page=" + page
-                + "&pageSize=" + pageSize
-                + "&apiKey=" + apiKey;
-
-        URL url = new URL(urlStr);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
         conn.setRequestMethod("GET");
 
-        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+        InputStream is = conn.getInputStream();
+        BufferedReader br = new BufferedReader(new InputStreamReader(is));
+
         StringBuilder sb = new StringBuilder();
         String line;
-
         while ((line = br.readLine()) != null) sb.append(line);
-        br.close();
 
         return new JSONObject(sb.toString());
     }
@@ -63,42 +58,45 @@ public class NewsServlet extends HttpServlet {
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws IOException, ServletException {
 
-        String path = req.getServletPath();
+        String servletPath = req.getServletPath();
 
-        if ("/news-data".equals(path)) {
-            handleAjax(req, resp);
+        if ("/news-data".equals(servletPath)) {
+            handleApi(req, resp);
             return;
         }
 
         req.getRequestDispatcher("/index.jsp").forward(req, resp);
     }
 
-    private void handleAjax(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        String query = req.getParameter("q");
-        if (query == null || query.isEmpty()) query = "india";
+    private void handleApi(HttpServletRequest req, HttpServletResponse resp)
+            throws IOException {
+
+        String q = req.getParameter("q");
+        String category = req.getParameter("category");
+
+        String query = (q != null && !q.isEmpty())
+                ? q
+                : (category != null && !category.isEmpty() ? category : "india");
 
         int page = Integer.parseInt(req.getParameter("page") == null ? "1" : req.getParameter("page"));
         int pageSize = Integer.parseInt(req.getParameter("pageSize") == null ? "10" : req.getParameter("pageSize"));
 
+        JSONObject out = new JSONObject();
         try {
-            JSONObject apiResponse = callNewsAPI(query, page, pageSize);
+            JSONObject json = fetch(query, page, pageSize);
 
-            JSONObject out = new JSONObject();
-            out.put("status", apiResponse.optString("status"));
-            out.put("totalResults", apiResponse.optInt("totalResults"));
-            out.put("articles", apiResponse.optJSONArray("articles"));
-
-            resp.setContentType("application/json;charset=UTF-8");
-            resp.getWriter().write(out.toString());
+            out.put("status", json.optString("status"));
+            out.put("totalResults", json.optInt("totalResults"));
+            out.put("articles", json.optJSONArray("articles"));
 
         } catch (Exception e) {
-            JSONObject out = new JSONObject();
             out.put("status", "error");
             out.put("message", e.getMessage());
             out.put("articles", new JSONArray());
-
-            resp.setContentType("application/json;charset=UTF-8");
-            resp.getWriter().write(out.toString());
         }
+
+        resp.setContentType("application/json");
+        resp.getWriter().write(out.toString());
     }
 }
+
