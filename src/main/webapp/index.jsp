@@ -19,24 +19,30 @@
   </style>
 
   <script>
-    // Short helper
     function $(id){ return document.getElementById(id); }
 
-    // Theme handling
+    // Theme
     function loadTheme(){
       const t = localStorage.getItem('theme') || 'light';
       if (t === 'dark') document.body.classList.add('dark');
     }
     function toggleTheme(){
       document.body.classList.toggle('dark');
-      const now = document.body.classList.contains('dark') ? 'dark' : 'light';
-      localStorage.setItem('theme', now);
+      localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
     }
 
-    // Variables used by infinite scroll + fetch
     let currentPage = 1;
     let currentQuery = 'india';
     let currentCategory = '';
+
+    // Escape XSS
+    function escapeHtml(s){
+      if(!s) return '';
+      return s.replace(/&/g,'&amp;')
+              .replace(/</g,'&lt;')
+              .replace(/>/g,'&gt;')
+              .replace(/"/g,'&quot;');
+    }
 
     function fetchNews(reset){
       if (reset) currentPage = 1;
@@ -79,56 +85,43 @@
         });
     }
 
-    // Render a single news card
+    // Append card
     function appendCard(a){
       const card = document.createElement('div');
       card.className = 'col-md-6 mb-3';
 
-      const image =
-        a.urlToImage ?
-          '<img src="' + a.urlToImage + '" class="img-thumb" onerror="this.style.display=\'none\'">' :
-          '';
+      const title = escapeHtml(a.title || '');
+      const desc = escapeHtml(a.description || '');
+      const source = escapeHtml((a.source && a.source.name) ? a.source.name : '');
+      const time = escapeHtml(a.publishedAt ? new Date(a.publishedAt).toLocaleString() : '');
+      const image = (a.urlToImage)
+        ? '<img src="' + a.urlToImage + '" class="img-thumb" onerror="this.style.display=\'none\'">'
+        : '';
 
-      const title = a.title || '';
-      const desc = a.description || '';
-      const source = (a.source && a.source.name) ? a.source.name : '';
-      const time = a.publishedAt ? new Date(a.publishedAt).toLocaleString() : '';
+      const html =
+        '<div class="card ' + (document.body.classList.contains("dark") ? 'dark' : '') + '">' +
+          image +
+          '<div class="card-body">' +
+            '<h5 class="card-title">' + title + '</h5>' +
+            '<p class="card-text">' + desc + '</p>' +
+            '<div class="d-flex justify-content-between align-items-center">' +
+              '<small class="text-muted">' + source + ' • ' + time + '</small>' +
+              '<a href="' + a.url + '" target="_blank" class="btn btn-sm btn-primary">Read</a>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
 
-      card.innerHTML = `
-        <div class="card ${document.body.classList.contains('dark') ? 'dark' : ''}">
-          ${image}
-          <div class="card-body">
-            <h5 class="card-title">${escapeHtml(title)}</h5>
-            <p class="card-text">${escapeHtml(desc)}</p>
-            <div class="d-flex justify-content-between align-items-center">
-              <small class="text-muted">${escapeHtml(source)} • ${escapeHtml(time)}</small>
-              <a href="${a.url}" target="_blank" class="btn btn-sm btn-primary">Read</a>
-            </div>
-          </div>
-        </div>`;
-
+      card.innerHTML = html;
       $('news-list').appendChild(card);
     }
 
-    // Escape HTML
-    function escapeHtml(s){
-      if(!s) return '';
-      return s.replace(/&/g,'&amp;')
-              .replace(/</g,'&lt;')
-              .replace(/>/g,'&gt;')
-              .replace(/"/g,'&quot;');
-    }
-
-    // Search
     function onSearch(e){
       e.preventDefault();
-      const v = $('search-input').value.trim();
-      currentQuery = v || 'india';
+      currentQuery = $('search-input').value.trim() || 'india';
       currentCategory = '';
       fetchNews(true);
     }
 
-    // Category selection
     function onCategory(cat){
       currentCategory = cat;
       currentQuery = cat;
@@ -136,7 +129,6 @@
       fetchNews(true);
     }
 
-    // Trending tags
     function onTag(tag){
       currentQuery = tag;
       currentCategory = '';
@@ -151,22 +143,19 @@
       }
     });
 
-    // Initialize page
     window.addEventListener('load', () => {
       loadTheme();
-      currentQuery = 'india';
       fetchNews(true);
 
-      // Trending items
       const tags = ['Elections','Cricket','AI','Movies','Startups'];
-      const container = $('trending');
       tags.forEach(t => {
-        const b = document.createElement('span');
-        b.className = 'badge bg-secondary badge-tag';
-        b.style.marginRight = '6px';
-        b.onclick = () => onTag(t);
-        b.innerText = t;
-        container.appendChild(b);
+        const el = document.createElement('span');
+        el.className = 'badge bg-secondary badge-tag';
+        el.style.cursor = 'pointer';
+        el.style.marginRight = '6px';
+        el.onclick = () => onTag(t);
+        el.innerText = t;
+        $('trending').appendChild(el);
       });
     });
   </script>
@@ -188,10 +177,10 @@
     </div>
   </div>
 
-  <!-- Search Bar -->
+  <!-- Search -->
   <form onsubmit="onSearch(event)" class="input-group mb-3">
     <input id="search-input" type="text" class="form-control"
-           placeholder="Search latest news...">
+           placeholder="Search news…">
     <button class="btn btn-primary">Search</button>
   </form>
 
@@ -212,7 +201,7 @@
   <!-- Loading -->
   <div id="loading" class="loading">Loading news…</div>
 
-  <!-- News Cards -->
+  <!-- News cards -->
   <div id="news-list" class="row"></div>
 
 </div>
