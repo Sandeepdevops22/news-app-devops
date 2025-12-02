@@ -1,37 +1,36 @@
 pipeline {
-    agent any
+    agent none
 
     stages {
-        stage('checkout') {
-            steps {
-                sh "rm -rf news-app-devops"
-              sh  "git clone https://github.com/vinayak432/news-app-devops/"
-            }
-        }
-   stage(' build') {
+
+        stage('Build') {
+            agent { label 'Java' }
             steps {
                 sh "mvn clean package"
             }
         }
-         stage('Test') {
+
+        stage('Test') {
+            agent { label 'Java' }
             steps {
                 sh "mvn test"
             }
         }
- //    stage('version build') {
-   //         steps {
-     //           sh "mvn "
-       //     }
-        //}
-         stage('deploy tomcat') {
+
+        stage('Versioning') {
+            agent { label 'Java' }
             steps {
-                sh "sudo cp /var/lib/jenkins/workspace/jenkinsfilef12_feature-2/target/news-app.war /opt/tomcat10/webapps/"
+                echo "version"
             }
         }
-  // stage('Upload Artifact to JFrog') {
-    //steps {
-      //  sh 'mvn deploy'
-    //}
-//}
+
+        stage('Deploy') {
+            agent { label 'Java' }
+            steps {
+                sh """
+                /usr/bin/sudo cp /home/ubuntu/news-app-devops/target/news-app.war /opt/tomcat10/webapps/
+                """
+            }
+        }
     }
 }
