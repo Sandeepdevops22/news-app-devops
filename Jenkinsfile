@@ -1,50 +1,37 @@
 pipeline {
-    agent { label 'java' }
+    agent any
+
     stages {
-        stage('News-App-Checkout') {
+        stage('checkout') {
             steps {
-                sh 'rm -rf news-app-devops'
-                sh 'git clone https://github.com/Devopsdemo2025/news-app-devops.git'
-                echo "git clone completed"
+                sh "rm -rf news-app-devops"
+              sh  "git clone https://github.com/vinayak432/news-app-devops/"
             }
         }
-        stage('Build') {
+   stage(' build') {
             steps {
-                sh 'mvn clean package'
+                sh "mvn clean package"
             }
         }
-        stage('Test') {
+         stage('Test') {
             steps {
-                sh 'mvn test'
+                sh "mvn test"
             }
         }
-        stage('Version-Build') {
+ //    stage('version build') {
+   //         steps {
+     //           sh "mvn "
+       //     }
+        //}
+         stage('deploy tomcat') {
             steps {
-                script {
-                    // Example: version = 1.0.<BUILD_NUMBER>
-                    def version = "1.0.${env.BUILD_NUMBER}"
-                    echo "Setting project version to ${version}"
-                    
-                    // Update pom.xml version
-                    sh "mvn versions:set -DnewVersion=${version}"
-                    
-                    // Build with new version
-                    sh "mvn clean package"
-                }
+                sh "sudo cp /var/lib/jenkins/workspace/jenkinsfilef12_feature-2/target/news-app.war /opt/tomcat10/webapps/"
             }
         }
-        stage('Deploy') {
-    steps {
-   sh "sudo scp /home/slave1/workspace/p_MultiBranch_Pipeline_feature-1/target/news-app.war  jenkins@13.233.20.29:/opt/apache-tomcat-11.0.14/webapps/" 
-      echo "build deployed"
+  // stage('Upload Artifact to JFrog') {
+    //steps {
+      //  sh 'mvn deploy'
+    //}
+//}
     }
-}
-       
-    }
-    post {
-    success {
-        archiveArtifacts artifacts: 'target/*.war', fingerprint: true
-    }
-}
-    
 }
