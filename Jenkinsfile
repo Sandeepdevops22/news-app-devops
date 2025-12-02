@@ -42,45 +42,31 @@ pipeline {
             }
         }
 
-        stage('Push the artifacts into Jfrog Artifactory') {
-            steps {
-                script {
-
-                    // Timestamp for folder structure
-                    def currentDate = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm").format(new Date())
-
-                    // ✔ FIXED — include the repository name
-                    def targetPath = "generic-local/NewsApp/${currentDate}/"
-
-                    // Configure Artifactory
-                    rtServer(
-                        id: 'Artifactory',
-                        url: 'https://trialea6yjn.jfrog.io/artifactory',
-                        credentialsId: 'jfrog-credentials-id'
-                    )
-
-                    // Upload artifact from target/ folder
-                    rtUpload(
-                        serverId: 'Artifactory',
-                        spec: """
-                        {
-                            "files": [
-                                {
-                                    "pattern": "target/*.war",
-                                    "target": "${targetPath}"
-                                }
-                            ]
-                        }
-                        """
-                    )
-                }
+        // Cleaned up Artifactory Stage (Use this instead of rtServer/rtUpload steps)
+stage('Push the artifacts into Jfrog Artifactory') {
+    steps {
+        script {
+            def currentDate = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm").format(new Date())
+            def targetPath = "NewsApp/${currentDate}/"
+            
+            // This wrapper provides authentication for all steps inside it
+            withArtifactory(
+                url: 'https://trialea6yjn.jfrog.io/', // Use the base URL
+                credentialsId: 'jfrog-credentials-id'
+            ) {
+                rtUpload(
+                    spec: """
+                    {
+                        "files": [
+                            {
+                                "pattern": "target/news-app.war", // Target the WAR file
+                                "target": "${targetPath}"
+                            }
+                        ]
+                    }
+                    """
+                )
             }
-        }
-    }
-
-    post {
-        success {
-            archiveArtifacts artifacts: 'target/*.war', fingerprint: true
         }
     }
 }
