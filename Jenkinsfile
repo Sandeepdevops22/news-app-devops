@@ -4,7 +4,7 @@ pipeline {
         stage('News-App-Checkout') {
             steps {
                 sh 'rm -rf news-app-devops'
-                sh 'https://github.com/Sandeepdevops22/news-app-devops.git'
+                sh 'git clone https://github.com/Sandeepdevops22/news-app-devops.git'
                 echo "git clone completed"
             }
         }
@@ -35,7 +35,7 @@ pipeline {
         }
         stage('Deploy') {
     steps {
-   sh "sudo cp /home/ubuntu/news-app-devops/target/news-app.war /opt/tomcat10/webapps/"
+   sh "sudo cp /home/slave3/workspace/News-app_feature-1/target/news-app.war /opt/tomcat10/webapps/"
       echo "build deployed"
     }
 }
