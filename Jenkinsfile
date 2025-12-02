@@ -51,7 +51,7 @@ stage('Push the artifacts into Jfrog Artifactory') {
 
             // Configure the Artifactory server
             rtServer(
-                id: 'artifactory',
+                id: 'Artifactory',
                 url: 'https://trialea6yjn.jfrog.io/artifactory',
                 credentialsId: 'jfrog-credentials-id'   // must match Jenkins credentials
             )
