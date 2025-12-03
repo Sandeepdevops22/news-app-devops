@@ -1,39 +1,48 @@
 pipeline {
     agent { label 'slave3' }
-
+    
     stages {
-
-        stage('Build') {
+        stage('Checkout') {
             steps {
-                sh 'mvn clean package'
+                git branch: 'feature-1', url: 'https://github.com/pradeepreddy-hub/news-app-devops.git'
             }
         }
-
-        stage('Test') {
+        stage('Build') {
+            steps {
+                sh 'mvn clean package -DskipTests=false'
+            }
+        }
+        stage('Run Tests') {
             steps {
                 sh 'mvn test'
             }
         }
 
-        stage('Version-Build') {
+        stage('Deploy WAR to Tomcat') {
             steps {
-                script {
-                    def version = "1.0.${env.BUILD_NUMBER}"
-                    echo "Setting project version to ${version}"
+                sh '''
+                    TOMCAT_PATH="/opt/tomcat10/webapps"
+                    WAR_FILE="target/news-app.war"
 
-                    sh """
-                        mvn versions:set -DnewVersion=${version} -DgenerateBackupPoms=false
-                        mvn clean package
-                    """
-                }
+                    echo "Cleaning old deployment..."
+                    sudo rm -rf $TOMCAT_PATH/news-app $TOMCAT_PATH/news-app.war
+
+                    echo "Copying new WAR..."
+                    sudo cp $WAR_FILE $TOMCAT_PATH/
+
+                    echo "Restarting Tomcat..."
+                    pkill -f 'org.apache.catalina.startup.Bootstrap' || true
+                    nohup $TOMCAT_PATH/../bin/startup.sh &
+                '''
             }
         }
-
-        stage('Deploy') {
-            steps {
-                sh "sudo cp /home/slave3/workspace/News-app_feature-1/target/news-app.war /opt/tomcat10/webapps/"
-                echo "Build deployed successfully."
-            }
+    }
+    post {
+        success {
+            echo 'Build and deployment completed successfully!'
+        }
+        failure {
+            echo 'Build or deployment failed. Check logs for details.'
         }
     }
 }
