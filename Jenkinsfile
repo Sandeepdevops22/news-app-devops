@@ -31,12 +31,8 @@ pipeline {
                 }
             }
         }
-        
-        // 5. Local Deployment to Tomcat
         stage('Deploy') {
             steps {
-                // Copy the newly versioned WAR file to the Tomcat webapps directory on the agent
-                // NOTE: This requires 'sudo' permissions on the agent and is generally for local testing.
                 sh "sudo cp /home/slave3/workspace/News-app_feature-1/target/news-app.war /opt/tomcat10/webapps/"
                 echo "build deployed"
             }
