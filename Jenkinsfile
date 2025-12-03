@@ -1,6 +1,5 @@
 pipeline {
     agent { 
-        // Use the label of your Jenkins agent (slave3) that has Maven, Git, and necessary permissions.
         label 'slave3' 
     }
     
