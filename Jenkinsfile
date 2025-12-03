@@ -1,46 +1,29 @@
 pipeline {
-    agent { 
-        label 'slave3' 
-    }
-    
+    agent { label 'slave3'}
     stages {
-        // 1. Source Checkout (Initial SCM Checkout is done by Jenkins automatically)
         stage('News-App-Checkout') {
             steps {
-                // Perform a manual checkout into a dedicated directory if needed for Maven structure
-                // Note: The main SCM checkout already places files in the workspace. This step
-                // is often redundant if the 'dir' structure isn't specifically required.
                 sh 'rm -rf news-app-devops'
                 sh 'git clone https://github.com/Sandeepdevops22/news-app-devops.git'
                 echo "git clone completed"
             }
         }
         
-        // 2. Build Stage
         stage('Build') {
             steps {
-                // Executes clean and package goals, generating the initial WAR file
                 sh 'mvn clean package'
             }
         }
-        
-        // 3. Test Stage
         stage('Test') {
             steps {
-                // Executes only the test goal (package already ran the tests once)
                 sh 'mvn test'
             }
         }
-        
-        // 4. Versioning and Rebuild Stage
         stage('Version-Build') {
             steps {
                 script {
-                    // Set project version using Jenkins BUILD_NUMBER (e.g., 1.0.17)
                     def version = "1.0.${env.BUILD_NUMBER}"
                     echo "Setting project version to ${version}"
-                    
-                    // Update pom.xml version
                     sh "mvn versions:set -DnewVersion=${version} -DgenerateBackupPoms=false"
                     
                     // Rebuild and package with the new version
