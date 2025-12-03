@@ -13,13 +13,13 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh 'cd news-app-devops && mvn clean package'
+                sh 'cd news-app-devops/news-app && mvn clean package'
             }
         }
 
         stage('Test') {
             steps {
-                sh 'cd news-app-devops && mvn test'
+                sh 'cd news-app-devops/news-app && mvn test'
             }
         }
 
@@ -30,7 +30,7 @@ pipeline {
                     echo "Setting project version to ${version}"
 
                     sh """
-                        cd news-app-devops
+                        cd news-app-devops/news-app
                         mvn versions:set -DnewVersion=${version} -DgenerateBackupPoms=false
                         mvn clean package
                     """
@@ -41,12 +41,11 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh """
-                    sudo cp /home/slave3/workspace/News-app_feature-1/target/news-app.war /opt/tomcat10/webapps
+                    sudo cp news-app-devops/news-app/target/news-app.war /opt/tomcat10/webapps/
                 """
                 echo "Build deployed to Tomcat"
             }
         }
     }
 }
-        
         
