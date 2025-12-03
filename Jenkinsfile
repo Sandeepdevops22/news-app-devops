@@ -1,85 +1,48 @@
 pipeline {
-    agent { label 'java' }
+    agent { label 'slave3' }
+    
     stages {
-        stage('News-App-Checkout') {
+        stage('Checkout') {
             steps {
-                sh 'rm -rf news-app-devops'
-                sh 'git clone https://github.com/Sandeepdevops22/news-app-devops.git'
-                echo "git clone completed"
+                git branch: 'feature-2', url: 'https://github.com/Sandeepdevops22/news-app-devops.git'
             }
         }
         stage('Build') {
             steps {
-                sh 'mvn clean package'
+                sh 'mvn clean package -DskipTests=false'
             }
         }
-        stage('Test') {
+        stage('Run Tests') {
             steps {
                 sh 'mvn test'
             }
         }
-        stage('Version-Build') {
+
+        stage('Deploy WAR to Tomcat') {
             steps {
-                script {
-                    // Example: version = 1.0.<BUILD_NUMBER>
-                    def version = "1.0.${env.BUILD_NUMBER}"
-                    echo "Setting project version to ${version}"
-                    
-                    // Update pom.xml version
-                    sh "mvn versions:set -DnewVersion=${version}"
-                    
-                    // Build with new version
-                    sh "mvn clean package"
-                }
+                sh '''
+                    TOMCAT_PATH="/opt/tomcat10/webapps"
+                    WAR_FILE="target/news-app.war"
+
+                    echo "Cleaning old deployment..."
+                    sudo rm -rf $TOMCAT_PATH/news-app $TOMCAT_PATH/news-app.war
+
+                    echo "Copying new WAR..."
+                    sudo cp $WAR_FILE $TOMCAT_PATH/
+
+                    echo "Restarting Tomcat..."
+                    pkill -f 'org.apache.catalina.startup.Bootstrap' || true
+                    nohup $TOMCAT_PATH/../bin/startup.sh &
+                '''
             }
         }
-        stage('Deploy') {
-    steps {
-   sh "sudo cp /home/slave3/workspace/News-app_feature-1/target/news-app.war /opt/tomcat10/webapps/"
-      echo "build deployed"
-    }
-}
-        // 6.3: Push the artifacts to Jfrog repository
-stage('Push the artifacts into Jfrog Artifactory') {
-    steps {
-        script {
-            // Get the current date and time in the format: yyyy-MM-dd_HH-mm
-            def currentDate = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm").format(new Date())
-
-            // Define the target path with the timestamp
-            def targetPath = "NewsApp/${currentDate}/"
-
-            // Configure the Artifactory server
-            rtServer(
-                id: 'Artifactory',
-                url: 'https://trialyth1ui.jfrog.io/artifactory',
-                credentialsId: 'jfrog-credentials-id'   // must match Jenkins credentials
-            )
-
-            // Upload the artifact to JFrog Artifactory with the timestamped path
-            rtUpload(
-                serverId: 'Artifactory',
-                spec: """
-                {
-                    "files": [
-                        {
-                            "pattern": "*.war",
-                            "target": "${targetPath}"
-                        }
-                    ]
-                }
-                """
-            )
-        }
-    }
-
-
-}
     }
     post {
-    success {
-        archiveArtifacts artifacts: 'target/*.war', fingerprint: true
+        success {
+            echo 'Build and deployment completed successfully!'
+        }
+        failure {
+            echo 'Build or deployment failed. Check logs for details.'
+        }
     }
-}
-    
 }
