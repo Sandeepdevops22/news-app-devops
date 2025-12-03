@@ -3,23 +3,15 @@ pipeline {
 
     stages {
 
-        stage('News-App-Checkout') {
-            steps {
-                sh 'rm -rf news-app-devops'
-                sh 'git clone https://github.com/Sandeepdevops22/news-app-devops.git'
-                echo "Git clone completed"
-            }
-        }
-
         stage('Build') {
             steps {
-                sh 'cd news-app-devops/news-app && mvn clean package'
+                sh 'mvn clean package'
             }
         }
 
         stage('Test') {
             steps {
-                sh 'cd news-app-devops/news-app && mvn test'
+                sh 'mvn test'
             }
         }
 
@@ -30,7 +22,6 @@ pipeline {
                     echo "Setting project version to ${version}"
 
                     sh """
-                        cd news-app-devops/news-app
                         mvn versions:set -DnewVersion=${version} -DgenerateBackupPoms=false
                         mvn clean package
                     """
@@ -40,12 +31,9 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                sh """
-                    sudo cp news-app-devops/news-app/target/news-app.war /opt/tomcat10/webapps/
-                """
-                echo "Build deployed to Tomcat"
+                sh "sudo cp target/news-app.war /opt/tomcat10/webapps/"
+                echo "Build deployed successfully."
             }
         }
     }
 }
-        
