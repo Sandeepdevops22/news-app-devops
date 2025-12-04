@@ -1,101 +1,98 @@
 package com.vikas.news;
 
 import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.*;
+import org.json.*;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
+import java.io.*;
+import java.net.*;
 import java.util.Properties;
 
 public class NewsServlet extends HttpServlet {
 
     private String apiKey;
-    private String baseUrl;
 
     @Override
     public void init() throws ServletException {
-        try (InputStream input = getClass().getClassLoader().getResourceAsStream("config.properties")) {
-
-            if (input == null) {
-                throw new ServletException("config.properties not found.");
-            }
+        try (InputStream in = getClass().getClassLoader().getResourceAsStream("config.properties")) {
+            if (in == null) throw new ServletException("config.properties missing");
 
             Properties props = new Properties();
-            props.load(input);
+            props.load(in);
 
             apiKey = props.getProperty("NEWS_API_KEY");
-            baseUrl = props.getProperty("NEWS_URL");
 
+            if (apiKey == null || apiKey.isBlank()) {
+                throw new ServletException("Missing NEWS_API_KEY in config.properties");
+            }
         } catch (IOException e) {
-            throw new ServletException("Error loading config.properties", e);
+            throw new ServletException("Failed to load config", e);
         }
     }
 
-    private List<String> fetchNews(String fromDate, String toDate) throws IOException {
+    private JSONObject fetchNews(String q, int page, int pageSize) throws IOException {
 
-        String finalUrl = baseUrl + apiKey +
-                "&from=" + fromDate +
-                "&to=" + toDate +
-                "&sortBy=publishedAt";
+        String urlStr =
+                "https://newsapi.org/v2/top-headlines?" +
+                "country=in" +
+                "&q=" + URLEncoder.encode(q, "UTF-8") +
+                "&page=" + page +
+                "&pageSize=" + pageSize +
+                "&apiKey=" + apiKey;
 
-        URL url = new URL(finalUrl);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("GET");
+        URL url = new URL(urlStr);
+        HttpURLConnection con = (HttpURLConnection) url.openConnection();
+        con.setRequestMethod("GET");
 
-        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-        StringBuilder json = new StringBuilder();
+        BufferedReader br = new BufferedReader(new InputStreamReader(con.getInputStream()));
+        StringBuilder sb = new StringBuilder();
         String line;
 
         while ((line = br.readLine()) != null) {
-            json.append(line);
+            sb.append(line);
         }
 
-        JSONObject jsonObj = new JSONObject(json.toString());
-        JSONArray articles = jsonObj.optJSONArray("articles");
-
-        List<String> headlines = new ArrayList<>();
-        if (articles == null) return headlines;
-
-        for (int i = 0; i < Math.min(10, articles.length()); i++) {
-            headlines.add(articles.getJSONObject(i).getString("title"));
-        }
-
-        return headlines;
+        return new JSONObject(sb.toString());
     }
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws IOException, ServletException {
 
-        LocalDate today = LocalDate.now();
-        String todayStr = today.toString();
+        String servletPath = req.getServletPath();
 
-        // Fetch today's news first
-        List<String> headlines = fetchNews(todayStr, todayStr);
+        // AJAX call → returns JSON
+        if ("/news-data".equals(servletPath)) {
 
-        // If no news found, fetch last 7 days
-        if (headlines.isEmpty()) {
-            LocalDate weekAgo = today.minusDays(7);
-            headlines = fetchNews(weekAgo.toString(), todayStr);
+            String q = req.getParameter("q");
+            if (q == null || q.isBlank()) q = "latest";
 
-            req.setAttribute("date", weekAgo + " to " + todayStr);
-        } else {
-            req.setAttribute("date", todayStr);
+            int page = Integer.parseInt(req.getParameter("page") == null ? "1" : req.getParameter("page"));
+            int pageSize = 10;
+
+            try {
+                JSONObject result = fetchNews(q, page, pageSize);
+                JSONObject out = new JSONObject();
+                out.put("status", "ok");
+                out.put("articles", result.optJSONArray("articles"));
+                writeJson(resp, out);
+            } catch (Exception e) {
+                JSONObject out = new JSONObject();
+                out.put("status", "error");
+                out.put("message", e.getMessage());
+                out.put("articles", new JSONArray());
+                writeJson(resp, out);
+            }
+
+            return;
         }
 
-        req.setAttribute("headlines", headlines);
+        // Normal JSP load
         req.getRequestDispatcher("/index.jsp").forward(req, resp);
+    }
+
+    private void writeJson(HttpServletResponse resp, JSONObject obj) throws IOException {
+        resp.setContentType("application/json;charset=UTF-8");
+        resp.getWriter().write(obj.toString());
     }
 }
